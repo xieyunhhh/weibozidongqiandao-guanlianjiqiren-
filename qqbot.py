@@ -1,0 +1,817 @@
+# -*- coding: utf-8 -*-
+"""QQ 官方开放平台机器人（api-v2，WebSocket 长连接，单聊 C2C）。
+
+客户在 QQ 私聊里给机器人发指令即可使用（与飞书/微信共用同一张飞书卡密表）：
+绑定微博、一键签到、卡密兑换、购买、我的卡、设置签到时间等。
+QQ 用户身份用 author.user_openid 存储，与飞书(open_id)/微信(昵称)互不串扰。
+
+复用现有模块：weibo/core.py、weibo/store.py、card/service.py、feishu/bitable.py、config.py。
+
+运行环境：飞书 venv（已装 qq-botpy/aiohttp/requests）。启动：
+C:\\...\\new-chat\\weibo_claw_bot\\.venv\\Scripts\\python.exe qqbot.py
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import glob
+import json
+import os
+import re
+import sys
+import threading
+import time
+import traceback
+
+import aiohttp
+import requests
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+if BASE not in sys.path:
+    sys.path.insert(0, BASE)
+
+from config import load_config, build_services  # noqa: E402
+from weibo import store as wb_store  # noqa: E402
+from weibo import core as wb_core  # noqa: E402
+from weibo import login as wb_login  # noqa: E402
+from card import pending  # noqa: E402
+
+CFG = load_config()
+SVC = build_services(CFG)
+CARDS = SVC["cards"]
+REPO = SVC["repo"]
+CUSTOMERS = SVC.get("customers")
+
+
+def _reg_customer(platform: str, channel: str, key: str, **kw) -> None:
+    """登记/更新 QQ 客户到飞书客户台账（尽力而为）。"""
+    if not CUSTOMERS or not key:
+        return
+    try:
+        CUSTOMERS.register(platform, channel, key, **kw)
+    except Exception:
+        pass
+
+
+QQCFG = CFG.get("qq", {}) or {}
+APPID = QQCFG.get("app_id") or ""
+APPSECRET = QQCFG.get("app_secret") or ""
+
+WSS_URL = "wss://api.bot.qq.com/websocket/"
+TOKEN_URL = "https://api.bot.qq.com/app/getAppAccessToken"
+# GROUP_AND_C2C_EVENT = 1<<25（含 C2C 单聊 + 群聊消息事件）
+INTENTS = 1 << 25
+
+# ---------- access_token 缓存与刷新（约 1.9 小时过期，自动重取） ----------
+_token_cache = {"token": "", "expire_at": 0.0}
+_token_lock = threading.Lock()
+
+
+def get_access_token() -> str:
+    with _token_lock:
+        if _token_cache["token"] and time.time() < _token_cache["expire_at"] - 300:
+            return _token_cache["token"]
+        r = requests.post(TOKEN_URL, json={"appId": APPID, "clientSecret": APPSECRET}, timeout=20)
+        data = r.json()
+        tok = data.get("access_token")
+        if not tok:
+            raise RuntimeError(f"获取QQ access_token失败: {data}")
+        _token_cache["token"] = tok
+        _token_cache["expire_at"] = time.time() + int(data.get("expires_in", 6000))
+        print(f"[qq] 已刷新 access_token（{int(data.get('expires_in',6000))}s）")
+        return tok
+
+
+def get_ws_url() -> str:
+    """获取官方下发的 WebSocket 网关地址（按应用环境自动返回正式/沙箱地址）。
+
+    官方 SDK 通过 /gateway/bot 下发 ws 地址：正式环境为 wss://api.sgroup.qq.com/websocket，
+    沙箱环境返回沙箱域名。不能硬编码网关地址，否则沙箱应用连正式网关会收不到任何消息事件。
+    """
+    r = requests.get("https://api.bot.qq.com/gateway/bot",
+                     headers={"Authorization": f"QQBot {get_access_token()}", "X-Union-Appid": APPID},
+                     timeout=20)
+    data = r.json()
+    url = data.get("url")
+    if not url:
+        raise RuntimeError(f"获取QQ网关失败: {data}")
+    print(f"[qq] 网关地址: {url}")
+    return url
+
+
+# ---------- 发送单聊消息（REST） ----------
+async def qq_send(openid: str, text: str, msg_id: str = "") -> None:
+    if not text:
+        return
+    url = f"https://api.bot.qq.com/v2/users/{openid}/messages"
+    # 被动回复必须带 msg_id（原消息ID），否则被当作已取消的主动推送而报 50015001
+    body = {"content": text, "msg_type": 0, "msg_seq": int(time.time() * 1000) % 1000000}
+    if msg_id:
+        body["msg_id"] = msg_id
+    headers = {"Authorization": f"QQBot {get_access_token()}", "X-Union-Appid": APPID, "Content-Type": "application/json"}
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, headers=headers, json=body, timeout=20) as resp:
+                txt = await resp.text()
+                if resp.status == 200:
+                    print(f"[qq->{openid}] 发送ok")
+                else:
+                    print(f"[qq->{openid}] 发送失败 {resp.status}: {txt[:200]}")
+    except Exception as e:
+        print(f"[qq->{openid}] 发送err: {e}")
+
+
+def _split_text(text: str, limit: int = 1800) -> list:
+    """按行把长文本切分为多段，每段不超过 limit 字符（QQ 单条消息有长度上限）。"""
+    if len(text) <= limit:
+        return [text]
+    parts: list = []
+    cur = ""
+    for line in text.split("\n"):
+        if cur and len(cur) + len(line) + 1 > limit:
+            parts.append(cur)
+            cur = ""
+            while len(line) > limit:
+                parts.append(line[:limit])
+                line = line[limit:]
+        cur = cur + "\n" + line if cur else line
+    if cur:
+        parts.append(cur)
+    return parts
+
+
+# ---------- 状态与任务 ----------
+_jobs: dict[str, str] = {}          # openid -> 后台签到状态
+_recent_msgs: list[str] = []        # 最近收到的 QQ 消息（供飞书查看）
+
+USAGE = (
+    "📖 微博超话一键签到 · 使用说明\n\n"
+    "1. 发送「兑换 卡密」激活（没有卡先发「购买」）\n"
+    "2. 发送「绑定cookie 你的cookie」绑定微博（浏览器登录 weibo.com 后 F12 复制）\n"
+    "3. 发送「签到」自动签到全部超话，稍后发「状态」查看结果\n\n"
+    "【指令】\n"
+    "· 帮助/使用说明 —— 本说明\n"
+    "· 绑定cookie <cookie> —— 粘贴微博cookie绑定\n"
+    "· 签到 —— 一键签到全部超话（后台执行，完成后发「状态」看结果）\n"
+    "· 状态/分析 —— 查看超话签到情况\n"
+    "· 我的卡 —— 查看卡密状态\n"
+    "· 购买/获取卡密 —— 查看价格并联系管理员发卡\n"
+    "· 付款完成 —— 通知管理员核实收款\n"
+    "· 兑换 <卡密> —— 激活卡密\n"
+    "· 设置签到时间 03:00~05:00 —— 设置每日自动签到时间段\n\n"
+    "💡 卡密为一次性激活码，兑换后尽快使用。"
+)
+
+
+def _handle(openid: str, text: str) -> str:
+    if not text:
+        return "请输入指令，发送「帮助」查看。"
+    lowered = text.lower()
+    first, _, rest = text.partition(" ")
+
+    if lowered in ("帮助", "使用说明", "help", "start", "菜单"):
+        return USAGE
+    if first in ("绑定微博", "绑定", "二维码登录", "扫码登录", "登录"):
+        return _cmd_bind(openid)
+    if first in ("绑定cookie", "cookie"):
+        return _bind_cookie(openid, rest)
+    if first in ("签到", "一键签到"):
+        return _checkin(openid)
+    if first in ("状态", "分析", "查看状态", "签到结果"):
+        return _status(openid)
+    if first in ("我的卡", "卡", "卡密状态"):
+        return CARDS.entitlement_text(openid)
+    if first in ("购买", "获取卡密", "买卡", "充值"):
+        return _buy()
+    if first in ("付款完成", "已付款", "付款成功"):
+        return _paid(openid)
+    if first in ("兑换", "激活", "兑换卡密"):
+        return _redeem(openid, rest)
+    if first in ("设置签到时间", "签到时间", "定时签到"):
+        return _set_schedule(openid, rest)
+    if first in ("取消", "停止"):
+        _jobs.pop(openid, None)
+        return "已停止进行中的任务。"
+
+    return "无法识别指令，发送「帮助」查看可用命令。"
+
+
+# ---------- 微博二维码登录（复用 weibo/login.py 的 Selenium 方案，按原项目复写） ----------
+_PENDING_QR: dict[str, dict] = {}          # qr_id -> {"openid": ...}
+_QR_TMP_DIR = os.path.join(BASE, "storage", "qr_tmp")
+
+
+def _beautify_qr(src_path: str, out_path: str) -> str:
+    """把裸二维码合成到"登录引导卡片"上，降低被 QQ 内容审核误判的概率。"""
+    from PIL import Image, ImageDraw, ImageFont
+    qr = Image.open(src_path).convert("RGB")
+    qr_size = 520
+    qr = qr.resize((qr_size, qr_size), Image.LANCZOS)
+    W, H = 760, 900
+    card = Image.new("RGB", (W, H), (255, 255, 255))
+    draw = ImageDraw.Draw(card)
+    draw.rounded_rectangle((0, 0, W, H), radius=28, fill=(247, 248, 252))
+
+    def load_font(size):
+        for fp in (r"C:\Windows\Fonts\msyhbd.ttc", r"C:\Windows\Fonts\msyh.ttc",
+                   r"C:\Windows\Fonts\simhei.ttf", r"C:\Windows\Fonts\arial.ttf"):
+            try:
+                return ImageFont.truetype(fp, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def center_text(d, text, font, y, fill):
+        w = d.textlength(text, font=font)
+        d.text(((W - w) / 2, y), text, font=font, fill=fill)
+
+    center_text(draw, "微博登录", load_font(46), 60, (30, 30, 30))
+    center_text(draw, "扫码登录微博 · 自动签到超话", load_font(30), 128, (120, 120, 120))
+    qr_x = (W - qr_size) // 2
+    card.paste(qr, (qr_x, 210))
+    center_text(draw, "请使用微博APP扫描下方二维码", load_font(28), H - 90, (160, 160, 160))
+    card.save(out_path, "JPEG", quality=88)
+    return out_path
+
+
+def _cmd_bind(openid: str):
+    """启动微博二维码登录，返回 ("QR_LOGIN", openid, qr_id, qr_src) 交由上层发送图片并轮询。"""
+    try:
+        qr_src, qr_id = wb_login.start_qr_login(
+            chromedriver_path=CFG.get("weibo", {}).get("chromedriver", ""),
+            headless=True,
+        )
+    except Exception as exc:
+        return f"二维码登录启动失败：{exc}\n可改用：绑定cookie <你的cookie>"
+    _PENDING_QR[qr_id] = {"openid": openid}
+    return ("QR_LOGIN", openid, qr_id, qr_src)
+
+
+async def qq_send_image(openid: str, img_path: str, msg_id: str = "") -> bool:
+    """QQ 单聊发送图片：富媒体上传（base64）拿 file_info，再以 msg_type=7 发送。"""
+    try:
+        with open(img_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+    except Exception as e:
+        print(f"[qq img] 读图失败: {e}")
+        return False
+    headers = {"Authorization": f"QQBot {get_access_token()}", "X-Union-Appid": APPID, "Content-Type": "application/json"}
+    try:
+        up_url = f"https://api.bot.qq.com/v2/users/{openid}/files"
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(up_url, headers=headers,
+                                 json={"file_type": 1, "file_data": b64}, timeout=30) as resp:
+                data = await resp.json()
+                if resp.status != 200 or not data.get("file_info"):
+                    print(f"[qq img] 上传失败 {resp.status}: {data}")
+                    return False
+                file_info = data["file_info"]
+        send_url = f"https://api.bot.qq.com/v2/users/{openid}/messages"
+        body = {"msg_type": 7, "media": {"file_info": file_info},
+                "msg_seq": int(time.time() * 1000) % 1000000}
+        if msg_id:
+            body["msg_id"] = msg_id
+        async with aiohttp.ClientSession() as sess2:
+            async with sess2.post(send_url, headers=headers, json=body, timeout=20) as resp2:
+                txt = await resp2.text()
+                if resp2.status == 200:
+                    print(f"[qq->{openid}] 图片发送ok")
+                    return True
+                print(f"[qq->{openid}] 图片发送失败 {resp2.status}: {txt[:200]}")
+                return False
+    except Exception as e:
+        print(f"[qq img] 发送err: {e}")
+        return False
+
+
+async def _wait_qr_bind(openid: str, qr_id: str, group_openid: str = "") -> None:
+    """后台轮询二维码扫码结果，成功后绑定 cookie 并通知用户（支持单聊/群聊）。"""
+    try:
+        cookies = await asyncio.to_thread(wb_login.wait_qr_scan, qr_id, 180)
+    except Exception as exc:
+        if group_openid:
+            await qq_send_group(group_openid, f"扫码超时或失败：{exc}\n可私聊机器人「绑定」或「绑定cookie」。")
+        else:
+            await qq_send(openid, f"扫码超时或失败：{exc}\n可重新发送「绑定」，或「绑定cookie <你的cookie>」")
+        return
+    try:
+        wb_store.save_cookies(openid, cookies)
+        _reg_customer("QQ", "群聊" if group_openid else "单聊", openid,
+                      group_name=group_openid or None, weibo_bound="已绑定")
+        msg = "✅ 微博扫码绑定成功！发送「签到」即可一键签到。"
+        if group_openid:
+            await qq_send_group(group_openid, msg)
+        else:
+            await qq_send(openid, msg)
+    except Exception as exc:
+        if group_openid:
+            await qq_send_group(group_openid, f"绑定失败：{exc}")
+        else:
+            await qq_send(openid, f"绑定失败：{exc}")
+
+
+async def _send_qr_and_wait(openid: str, qr_id: str, qr_src: str, msg_id: str) -> None:
+    os.makedirs(_QR_TMP_DIR, exist_ok=True)
+    img_path = os.path.join(_QR_TMP_DIR, f"qr_{qr_id}.png")
+    try:
+        await asyncio.to_thread(wb_login.qr_src_to_file, qr_src, img_path)
+    except Exception as e:
+        await qq_send(openid, f"二维码图片处理失败：{e}\n可改用「绑定cookie <你的cookie>」", msg_id)
+        return
+    await qq_send(openid, "请用微博APP扫码登录，二维码即将发送…", msg_id)
+    ok = await qq_send_image(openid, img_path, msg_id)
+    if not ok:
+        await qq_send(openid, "二维码发送失败，请改用「绑定cookie <你的cookie>」", msg_id)
+        return
+    await qq_send(openid, "已发送二维码，请用微博APP扫码。若超时可重新发送「绑定」。", msg_id)
+    asyncio.create_task(_wait_qr_bind(openid, qr_id))
+
+
+def _bind_cookie(openid: str, cookie_str: str) -> str:
+    cookie_str = cookie_str.strip()
+    if not cookie_str:
+        return "格式：绑定cookie k1=v1; k2=v2\n（浏览器登录 weibo.com 后 F12 复制 Cookie 值）"
+    try:
+        cookies = wb_core.cookie_string_to_dict(cookie_str)
+        if not cookies.get("SUB"):
+            return "cookie 缺少 SUB 字段，请确认复制完整。"
+        wb_store.save_cookies(openid, cookies)
+        _reg_customer("QQ", "单聊", openid, weibo_bound="已绑定")
+        return "✅ 微博绑定成功！发送「签到」即可一键签到。"
+    except Exception as exc:
+        return f"绑定失败：{exc}"
+
+
+def _format_checkin_result(result: dict) -> str:
+    """把签到结果格式化为「统计 + 完整超话列表」文本。"""
+    head = (
+        f"✅ 签到完成（完成率 {result.get('completion_rate', 0):.1f}%）\n"
+        f"总超话：{result.get('total', 0)}｜新签：{result.get('new', 0)}｜"
+        f"已签：{result.get('already', 0)}｜失败：{result.get('failed', 0)}\n"
+    )
+    details = result.get("details") or []
+    if not details:
+        return head + "\n（暂无可展示的超话）"
+    lines = [head, "\n【签到结果】"]
+    for i2, d in enumerate(details, 1):
+        lines.append(f"{i2}. {d.get('name', '?')} · {d.get('status', '?')} · {d.get('level', '')}")
+    return "\n".join(lines)
+
+
+def _checkin(openid: str) -> str:
+    if not CARDS.is_entitled(openid):
+        return "你还没有有效卡密。发送「购买」获取，或联系管理员发卡。"
+    cookies = wb_store.load_cookies(openid)
+    if not cookies:
+        return "你还没有绑定微博。发送「绑定cookie 你的cookie」绑定。"
+    if openid in _jobs:
+        return "你有一个签到正在后台执行，请稍后发「状态」查看。"
+    _jobs[openid] = "正在签到…"
+
+    def _run():
+        try:
+            result = wb_core.auto_checkin(cookies, delay=0.3)
+            _jobs[openid] = _format_checkin_result(result)
+        except Exception as exc:
+            _jobs[openid] = f"签到出错：{exc}"
+
+    threading.Thread(target=_run, daemon=True).start()
+    return "⏳ 已开始一键签到（后台执行，需几十秒）。完成后发送「状态」查看结果。"
+
+
+def _status(openid: str) -> str:
+    if openid in _jobs:
+        return _jobs[openid]
+    if not CARDS.is_entitled(openid):
+        return "你还没有有效卡密。发送「购买」获取。"
+    cookies = wb_store.load_cookies(openid)
+    if not cookies:
+        return "你还没有绑定微博。发送「绑定cookie 你的cookie」绑定。"
+    try:
+        result = wb_core.analyze_status(cookies)
+        st = result.get("stats", {})
+        head = (
+            f"📊 超话状态分析\n"
+            f"总超话：{st.get('total', 0)}｜已签到：{st.get('checked_in', 0)}｜"
+            f"可签到：{st.get('can_checkin', 0)}\n"
+            f"完成率：{result.get('completion_rate', 0) * 100:.1f}%\n"
+        )
+        topics = result.get("topics") or []
+        if not topics:
+            return head + "\n（暂无可展示的超话）"
+        lines = [head, "\n【超话列表】"]
+        for i2, t in enumerate(topics, 1):
+            lines.append(f"{i2}. {t.get('name', '?')} · {t.get('status', '?')} · {t.get('level', '')}")
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"分析出错：{exc}"
+
+
+PAY_QR_PATH = os.path.join(BASE, "storage", "pay_qrcode.png")
+
+
+def _buy():
+    """返回 ("BUY_QR", 价格说明, 收款码图片路径)，由上层发送文字+收款码。"""
+    plans = CFG.get("admin", {}).get("card_plans", {})
+    lines = []
+    for k, p in plans.items():
+        if p.get("permanent"):
+            continue
+        lines.append(f"· {p['name']} ¥{p['price_cents'] / 100:.0f}（{p['desc']}）")
+    text = (
+        "可购买卡类型：\n" + "\n".join(lines) + "\n\n"
+        "付款方式：扫描下方收款码付款\n"
+        "付款后发送「付款完成」，管理员核实到账后发放卡密。"
+    )
+    return ("BUY_QR", text, PAY_QR_PATH)
+
+
+def _paid(openid: str) -> str:
+    try:
+        seq = pending.add_payment(pending.PLATFORM_QQ, openid)
+    except Exception as exc:
+        return f"提交付款确认失败：{exc}"
+    _reg_customer("QQ", "单聊", openid, note=f"提交付款确认（编号 {seq}）")
+    return f"已把你的付款确认（编号 {seq}）推送给管理员（飞书），请等待核实后发卡。"
+
+
+def _redeem(openid: str, code: str) -> str:
+    code = code.strip()
+    if not code:
+        return "格式：兑换 <9位卡密>（字母+数字）"
+    ok, reason = CARDS.validate_code(code)
+    if not ok:
+        return f"兑换失败：{reason}"
+    try:
+        CARDS.activate(code, openid)
+    except Exception as exc:
+        return f"兑换失败：{exc}"
+    card = REPO.get_card(code) or {}
+    _reg_customer("QQ", "单聊", openid,
+                  weibo_bound="已绑定" if wb_store.load_cookies(openid) else None,
+                  card_type=card.get("type", ""),
+                  expire_at=card.get("expire_at", "") or None)
+    return f"🎉 兑换成功！\n卡密：{code.upper()}\n{CARDS.entitlement_text(openid)}"
+
+
+def _set_schedule(openid: str, text: str) -> str:
+    m = re.findall(r"(\d{1,2}):(\d{2})", text)
+    if len(m) < 2:
+        return "格式：设置签到时间 开始~结束\n例：设置签到时间 03:00~05:00"
+    try:
+        h1, mi1, h2, mi2 = int(m[0][0]), int(m[0][1]), int(m[1][0]), int(m[1][1])
+        if not (0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= mi1 <= 59 and 0 <= mi2 <= 59):
+            raise ValueError
+    except ValueError:
+        return "时间格式不正确，示例：设置签到时间 03:00~05:00"
+    norm = f"{h1:02d}:{mi1:02d}-{h2:02d}:{mi2:02d}"
+    _jobs[f"__schedule_{openid}"] = norm
+    return f"✅ 已设置每日签到时间段：{norm}。每天会在该时段内自动签到（可再发本指令随时修改）。"
+
+
+# ---------- 飞书远程操控 QQ（本地任务队列 IPC） ----------
+# 飞书机器人（bot/commands.py）把管理指令写入 storage/qq_tasks/<id>.json，
+# 本机器人后台循环读取执行，结果写回 storage/qq_results/<id>.json 供飞书读取回复。
+_QQ_TASKS_DIR = os.path.join(BASE, "storage", "qq_tasks")
+_QQ_RESULTS_DIR = os.path.join(BASE, "storage", "qq_results")
+
+
+async def _run_qq_task(task: dict) -> tuple[bool, str]:
+    """执行一条来自飞书的管理指令，返回 (是否成功, 回复文本)。"""
+    action = task.get("action", "")
+    p = task.get("params", {}) or {}
+    if action == "status":
+        return True, "✅ QQ 机器人运行中（WebSocket 长连接，订阅单聊+群聊）"
+    if action == "view":
+        openid = p.get("openid", "").strip()
+        if not openid:
+            return False, "格式：QQ 查看 <QQ用户openid>"
+        bound = bool(wb_store.load_cookies(openid))
+        try:
+            ent = CARDS.entitlement_text(openid)
+        except Exception as e:
+            ent = f"（查询卡密异常：{e}）"
+        return True, f"QQ 用户：{openid}\n微博绑定：{'✅是' if bound else '❌否'}\n卡密信息：\n{ent}"
+    if action == "checkin":
+        openid = p.get("openid", "").strip()
+        if not openid:
+            return False, "格式：QQ 签到 <QQ用户openid>"
+        return True, _checkin(openid)
+    if action == "issue_card":
+        openid = p.get("openid", "").strip()
+        if not openid:
+            return False, "格式：QQ 发卡 <QQ用户openid> [卡密]"
+        code = p.get("code", "").strip()
+        if code:
+            ok, reason = CARDS.validate_code(code)
+            if not ok:
+                return False, f"卡密无效：{reason}"
+            try:
+                CARDS.activate(code, openid)
+            except Exception as e:
+                return False, f"发卡失败：{e}"
+            _reg_customer("QQ", "单聊", openid,
+                          card_type=(REPO.get_card(code) or {}).get("type", "月卡"),
+                          expire_at=(REPO.get_card(code) or {}).get("expire_at", "") or None,
+                          note="管理员飞书远程发卡")
+            await qq_send(openid, f"🎉 您的月卡已到账！卡密：{code}")
+            return True, f"✅ 已向 QQ 用户 {openid} 发放卡密 {code} 并通知。"
+        try:
+            cards_all = REPO.all_cards()
+        except Exception as e:
+            return False, f"读取卡密库存失败：{e}"
+        free = next((c for c in cards_all if (c.get("status") or "") == "未激活"), None)
+        if not free:
+            return False, "卡密库存不足，请先在飞书「发卡 month N」补充。"
+        try:
+            CARDS.activate(free["code"], openid)
+        except Exception as e:
+            return False, f"发卡失败：{e}"
+        _reg_customer("QQ", "单聊", openid,
+                      card_type=free.get("type", "月卡"),
+                      expire_at=free.get("expire_at", "") or None,
+                      note="管理员飞书远程发卡")
+        await qq_send(openid, f"🎉 您的月卡已到账！卡密：{free['code']}")
+        return True, f"✅ 已向 QQ 用户 {openid} 发放月卡 {free['code']} 并通知。"
+    if action == "notify":
+        openid = p.get("openid", "").strip()
+        text = (p.get("text", "") or "").strip()
+        if not openid or not text:
+            return False, "缺少 QQ 用户openid 或通知内容。"
+        await qq_send(openid, text)
+        return True, f"已通知 QQ 用户 {openid}"
+    if action == "messages":
+        lines = list(_recent_msgs)
+        if not lines:
+            return True, "暂未收到新消息。"
+        return True, "QQ端最近消息：\n" + "\n".join(lines[-20:])
+    return False, f"未知操作：{action}"
+
+
+async def _drain_qq_tasks_once() -> None:
+    for tf in glob.glob(os.path.join(_QQ_TASKS_DIR, "*.json")):
+        try:
+            with open(tf, "r", encoding="utf-8") as f:
+                task = json.load(f)
+            rid = task.get("id", os.path.basename(tf)[:-5])
+            try:
+                ok, text = await _run_qq_task(task)
+            except Exception as e:
+                ok, text = False, f"执行出错：{e}\n{traceback.format_exc()}"
+            os.makedirs(_QQ_RESULTS_DIR, exist_ok=True)
+            with open(os.path.join(_QQ_RESULTS_DIR, f"{rid}.json"), "w", encoding="utf-8") as f:
+                json.dump({"id": rid, "ok": ok, "text": text,
+                           "done_at": time.strftime("%Y-%m-%d %H:%M:%S")}, f, ensure_ascii=False, indent=2)
+            print(f"[qq-admin] 执行 {task.get('action')} -> {rid}")
+        except Exception as e:
+            print(f"[qq-admin] 任务处理失败 {tf}: {e}\n{traceback.format_exc()}")
+        finally:
+            try:
+                os.remove(tf)
+            except Exception:
+                pass
+
+
+async def _drain_loop() -> None:
+    while True:
+        try:
+            await _drain_qq_tasks_once()
+        except Exception as e:
+            print(f"[qq] drain 扫描失败: {e}")
+        await asyncio.sleep(2)
+
+
+# ---------- 事件处理 ----------
+async def _process_msg(openid: str, text: str, msg_id: str = "") -> None:
+    text = (text or "").strip()
+    if not text:
+        return
+    print(f"[qq recv {openid}] {text[:60]}")
+    _recent_msgs.append(f"{time.strftime('%H:%M')} {openid[:12]}: {text[:60]}")
+    _recent_msgs[:] = _recent_msgs[-30:]
+    try:
+        out = await asyncio.to_thread(_handle, openid, text)
+    except Exception as e:
+        print(f"[qq handle {openid}] err: {e}\n{traceback.format_exc()}")
+        out = "系统繁忙，请稍后重试。"
+    if out:
+        if isinstance(out, tuple) and out and out[0] == "QR_LOGIN":
+            # 二维码登录：发图片给用户扫码 + 后台轮询绑定
+            _, openid2, qr_id, qr_src = out
+            await _send_qr_and_wait(openid2, qr_id, qr_src, msg_id)
+        elif isinstance(out, tuple) and out and out[0] == "BUY_QR":
+            # 购买：发价格说明 + 收款码图片
+            _, text, img_path = out
+            await qq_send(openid, text, msg_id=msg_id)
+            await qq_send_image(openid, img_path, msg_id)
+        else:
+            segs = _split_text(out)
+            for i, seg in enumerate(segs):
+                await qq_send(openid, seg, msg_id=msg_id if i == 0 else "")
+
+
+# ---------- 群聊消息处理（GROUP_AT_MESSAGE_CREATE / GROUP_MSG_RECEIVE） ----------
+async def qq_send_group(group_openid: str, text: str, msg_id: str = "") -> None:
+    if not text:
+        return
+    url = f"https://api.bot.qq.com/v2/groups/{group_openid}/messages"
+    body = {"content": text, "msg_type": 0, "msg_seq": int(time.time() * 1000) % 1000000}
+    if msg_id:
+        body["msg_id"] = msg_id
+    headers = {"Authorization": f"QQBot {get_access_token()}", "X-Union-Appid": APPID, "Content-Type": "application/json"}
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, headers=headers, json=body, timeout=20) as resp:
+                txt = await resp.text()
+                if resp.status == 200:
+                    print(f"[qq群->{group_openid}] 发送ok")
+                else:
+                    print(f"[qq群->{group_openid}] 发送失败 {resp.status}: {txt[:200]}")
+    except Exception as e:
+        print(f"[qq群->{group_openid}] 发送err: {e}")
+
+
+async def qq_send_image_group(group_openid: str, img_path: str, msg_id: str = "") -> bool:
+    """群聊发送图片：群富媒体上传 + 群发送。"""
+    try:
+        with open(img_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+    except Exception as e:
+        print(f"[qq群 img] 读图失败: {e}")
+        return False
+    headers = {"Authorization": f"QQBot {get_access_token()}", "X-Union-Appid": APPID, "Content-Type": "application/json"}
+    try:
+        up_url = f"https://api.bot.qq.com/v2/groups/{group_openid}/files"
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(up_url, headers=headers,
+                                 json={"file_type": 1, "file_data": b64}, timeout=30) as resp:
+                data = await resp.json()
+                if resp.status != 200 or not data.get("file_info"):
+                    print(f"[qq群 img] 上传失败 {resp.status}: {data}")
+                    return False
+                file_info = data["file_info"]
+        send_url = f"https://api.bot.qq.com/v2/groups/{group_openid}/messages"
+        body = {"msg_type": 7, "media": {"file_info": file_info},
+                "msg_seq": int(time.time() * 1000) % 1000000}
+        if msg_id:
+            body["msg_id"] = msg_id
+        async with aiohttp.ClientSession() as sess2:
+            async with sess2.post(send_url, headers=headers, json=body, timeout=20) as resp2:
+                txt = await resp2.text()
+                if resp2.status == 200:
+                    print(f"[qq群->{group_openid}] 图片发送ok")
+                    return True
+                print(f"[qq群->{group_openid}] 图片发送失败 {resp2.status}: {txt[:200]}")
+                return False
+    except Exception as e:
+        print(f"[qq群 img] 发送err: {e}")
+        return False
+
+
+async def _send_qr_group_and_wait(group_openid: str, member_openid: str, qr_id: str, qr_src: str, msg_id: str) -> None:
+    os.makedirs(_QR_TMP_DIR, exist_ok=True)
+    img_path = os.path.join(_QR_TMP_DIR, f"qr_{qr_id}.png")
+    try:
+        await asyncio.to_thread(wb_login.qr_src_to_file, qr_src, img_path)
+        card_path = os.path.join(_QR_TMP_DIR, f"card_{qr_id}.jpg")
+        await asyncio.to_thread(_beautify_qr, img_path, card_path)
+    except Exception as e:
+        await qq_send_group(group_openid, f"二维码图片处理失败：{e}\n可私聊机器人「绑定cookie」", msg_id)
+        return
+    await qq_send_group(group_openid, "请用微博APP扫码登录，二维码即将发送…", msg_id)
+    ok = await qq_send_image_group(group_openid, card_path, msg_id)
+    if not ok:
+        await qq_send_group(group_openid, "二维码发送失败，可私聊机器人「绑定」或「绑定cookie」。", msg_id)
+        return
+    await qq_send_group(group_openid, "已发送二维码，请扫码。若超时可私聊机器人重新「绑定」。", msg_id)
+    asyncio.create_task(_wait_qr_bind(member_openid, qr_id, group_openid=group_openid))
+
+
+async def _send_qr_to_member(group_openid: str, member_openid: str, qr_id: str, qr_src: str, msg_id: str) -> None:
+    """群聊临时会话：把微博二维码私聊发送给群里 @ 机器人的用户（群内发图被平台拦截）。"""
+    os.makedirs(_QR_TMP_DIR, exist_ok=True)
+    img_path = os.path.join(_QR_TMP_DIR, f"qr_{qr_id}.png")
+    try:
+        await asyncio.to_thread(wb_login.qr_src_to_file, qr_src, img_path)
+    except Exception as e:
+        await qq_send_group(group_openid, f"二维码生成失败：{e}\n可发送「绑定cookie 你的cookie」。", msg_id)
+        return
+    await qq_send(member_openid, "请用微博APP扫码登录，二维码即将私聊发送…")
+    ok = await qq_send_image(member_openid, img_path)
+    if not ok:
+        await qq_send(member_openid, "二维码发送失败，可发送「绑定cookie 你的cookie」。")
+        await qq_send_group(group_openid, "@你 私聊二维码发送失败，请直接私聊机器人发「绑定cookie」绑定。", msg_id)
+        return
+    await qq_send(member_openid, "已发送二维码，请扫码登录。若超时可重新发送「绑定」。")
+    await qq_send_group(group_openid, "@你 二维码已私聊发送，请查收后扫码。", msg_id)
+    asyncio.create_task(_wait_qr_bind(member_openid, qr_id, group_openid=group_openid))
+
+
+async def _process_group_msg(group_openid: str, member_openid: str, text: str, msg_id: str = "") -> None:
+    text = (text or "").strip()
+    if not text:
+        return
+    print(f"[qq群 recv {group_openid}/{member_openid}] {text[:60]}")
+    try:
+        out = await asyncio.to_thread(_handle, member_openid, text)
+    except Exception as e:
+        print(f"[qq群 handle {member_openid}] err: {e}\n{traceback.format_exc()}")
+        out = "系统繁忙，请稍后重试。"
+    if out:
+        if isinstance(out, tuple) and out and out[0] == "QR_LOGIN":
+            # 群内直接发送"美化合成后的登录引导卡片"（裸二维码易被内容审核拦截）
+            _, _, qr_id, qr_src = out
+            await _send_qr_group_and_wait(group_openid, member_openid, qr_id, qr_src, msg_id)
+        elif isinstance(out, tuple) and out and out[0] == "BUY_QR":
+            _, text2, img_path = out
+            await qq_send_group(group_openid, text2, msg_id=msg_id)
+            await qq_send_image_group(group_openid, img_path, msg_id)
+        else:
+            segs = _split_text(out)
+            for i, seg in enumerate(segs):
+                await qq_send_group(group_openid, seg, msg_id=msg_id if i == 0 else "")
+
+
+# ---------- WebSocket 主循环（连接 + 心跳 + 断线重连） ----------
+async def _ws_run() -> None:
+    token = get_access_token()
+    url = await asyncio.to_thread(get_ws_url)
+    headers = {"Authorization": f"QQBot {token}", "X-Union-Appid": APPID}
+    async with aiohttp.ClientSession() as sess:
+        async with sess.ws_connect(url, headers=headers, timeout=30) as ws:
+            identify = {"op": 2, "d": {
+                "token": f"QQBot {token}",
+                "intents": INTENTS,
+                "shard": [0, 1],
+                "properties": {"$os": "windows", "$browser": "my_library"},
+            }}
+            await ws.send_str(json.dumps(identify))
+            print("[qq] 已发送 Identify（订阅单聊+群聊消息）")
+            hb_interval = 41.25
+            last_beat = time.time()
+            while True:
+                try:
+                    msg = await asyncio.wait_for(ws.receive(), timeout=hb_interval + 5)
+                except asyncio.TimeoutError:
+                    # 到点发心跳，防止被服务端断开
+                    if time.time() - last_beat >= hb_interval - 2:
+                        try:
+                            await ws.send_str(json.dumps({"op": 1, "d": None}))
+                            last_beat = time.time()
+                        except Exception:
+                            break
+                    continue
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    op = data.get("op")
+                    if op == 10:  # Hello：返回心跳周期
+                        hb_interval = data["d"]["heartbeat_interval"] / 1000.0
+                        last_beat = time.time()
+                        await ws.send_str(json.dumps({"op": 1, "d": None}))
+                    elif op == 0:  # 事件
+                        t = data.get("t")
+                        if t == "READY":
+                            user = data.get("d", {}).get("user", {})
+                            print(f"[qq] 连接就绪，机器人：{user.get('username')} (bot={user.get('bot')})")
+                        elif t == "C2C_MESSAGE_CREATE":
+                            d = data.get("d", {})
+                            openid = (d.get("author") or {}).get("user_openid", "")
+                            content = d.get("content", "")
+                            msg_id = d.get("id", "")  # 原消息ID，用于被动回复
+                            if openid:
+                                await _process_msg(openid, content, msg_id)
+                        elif t == "GROUP_AT_MESSAGE_CREATE":
+                            d = data.get("d", {})
+                            group_openid = d.get("group_openid", "")
+                            member_openid = (d.get("author") or {}).get("member_openid", "")
+                            content = d.get("content", "")
+                            msg_id = d.get("id", "")
+                            if group_openid and member_openid:
+                                await _process_group_msg(group_openid, member_openid, content, msg_id)
+                        elif t == "GROUP_MSG_RECEIVE":
+                            # 群聊主动消息权限事件（群主开启/接受机器人主动消息），非群消息内容，仅记录
+                            print(f"[qq] 群聊主动消息权限事件: {data.get('d', {}).get('group_openid', '')}")
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE,
+                                  aiohttp.WSMsgType.ERROR):
+                    print("[qq] 连接关闭")
+                    break
+
+
+async def _main() -> None:
+    print(f"[qq] 启动 QQ 机器人（appid={APPID}）")
+    asyncio.create_task(_drain_loop())  # 处理飞书下发的管理任务
+    while True:
+        try:
+            await _ws_run()
+        except Exception as e:
+            print(f"[qq] 连接断开，3 秒后重连: {e}\n{traceback.format_exc()}")
+        await asyncio.sleep(3)
+
+
+def main_entry() -> None:
+    """统一入口（供 bot_all.py 三线程调用）。"""
+    asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main_entry()

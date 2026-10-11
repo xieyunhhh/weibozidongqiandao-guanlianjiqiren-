@@ -1,0 +1,44 @@
+{
+  "_说明": "复制本文件为 config.json 并填写真实值。带 *_PLACEHOLDER_* 的项是必填占位；空字符串表示暂不启用对应功能。",
+
+  "admin": {
+    "feishu_open_ids": [
+      "*管理员飞书 open_id（bot 首次收到消息后，日志里可看到）*"
+    ],
+    "card_plans": {
+      "month":   { "name": "月卡",   "price_cents": 2000, "days": 30,  "desc": "20元/月；新用户首月15元" }
+    }
+  },
+
+  "feishu": {
+    "app_id": "*飞书自建应用 app_id*",
+    "app_secret": "*飞书自建应用 app_secret*",
+    "app_token": "*飞书多维表格 app_token（bot 运行时读写卡密用）*",
+    "card_table_id": "*卡密表 table_id*"
+  },
+
+  "weibo": {
+    "chromedriver": "D:/weibo_claw_bot/drivers/msedgedriver.exe",
+    "chrome_headless": true,
+    "login_timeout_sec": 180,
+    "checkin_delay_sec": 0.3
+  },
+
+  "bot": {
+    "usage_on_first_contact": true,
+    "proactive_usage_on_start": false,
+    "payment_qr_image": "storage/payment_qr.jpg",
+    "daily_card": {
+      "enabled": true,
+      "count": 20,
+      "hour": 0,
+      "minute": 5,
+      "plan": "month"
+    },
+    "daily_checkin_hour": 8,
+    "daily_checkin_minute": 30,
+    "proactive_usage_hour": 9,
+    "proactive_usage_minute": 0,
+    "timezone": "Asia/Shanghai"
+  }
+}

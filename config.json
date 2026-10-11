@@ -1,0 +1,64 @@
+{
+  "_说明": "已配置：飞书 app 凭据与卡密表、chromedriver 路径、收款码、每日自动生成月卡。运营模式：管理员手动发卡。管理员身份通过 admin.feishu_open_ids 指定（open_id）。",
+
+  "admin": {
+    "feishu_open_ids": [
+      "ou_e87b3e3970970cd38596dc3e65001e81"
+    ],
+    "card_plans": {
+      "month":   { "name": "月卡",   "price_cents": 2000, "days": 30,  "desc": "20元/月；新用户首月15元" },
+      "lifetime":{ "name": "永久卡", "price_cents": 0, "days": 0, "permanent": true, "desc": "永久使用" }
+    }
+  },
+
+  "feishu": {
+    "app_id": "cli_aa34b85002b8dcd8",
+    "app_secret": "fheXv3ILkSwp8OYJhZ5GOdKTtGkhjbWk",
+    "app_token": "ApNtbz4tGaS8SMs6khdcPciYnKh",
+    "card_table_id": "tbl3XGsTLX5ISY09",
+    "customer_table_id": "tblocZdkkKBfgA64"
+  },
+
+  "weibo": {
+    "chromedriver": "D:/weibo_claw_bot/drivers/msedgedriver.exe",
+    "chrome_headless": true,
+    "login_timeout_sec": 180,
+    "checkin_delay_sec": 0.3
+  },
+
+  "bot": {
+    "usage_on_first_contact": true,
+    "proactive_usage_on_start": false,
+    "payment_qr_image": "storage/payment_qr.jpg",
+    "daily_card": {
+      "enabled": true,
+      "count": 300,
+      "hour": 0,
+      "minute": 5,
+      "plan": "month"
+    },
+    "daily_checkin_hour": 8,
+    "daily_checkin_minute": 30,
+    "proactive_usage_hour": 9,
+    "proactive_usage_minute": 0,
+    "timezone": "Asia/Shanghai"
+  },
+
+  "mp": {
+    "token": "*请填写公众号服务器配置Token（自定义字符串）*",
+    "appid": "*请填写公众号AppID*",
+    "appsecret": "*请填写公众号AppSecret*",
+    "port": 8800,
+    "admin_openids": []
+  },
+
+  "wx": {
+    "admin_nicknames": ["Apr_23_X_Tau", "Apr-23-x-Tau"]
+  },
+
+  "qq": {
+    "app_id": "1905703919",
+    "app_secret": "LD6ztnidZWTRPONNNOPRUXbfkpv18FNW",
+    "admin_openids": []
+  }
+}

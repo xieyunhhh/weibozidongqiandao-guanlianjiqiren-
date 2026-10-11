@@ -1,0 +1,5 @@
+# 微博超话签到 飞书机器人 —— 运行依赖
+lark-oapi>=1.7.0           # 飞书官方 SDK（长连接接收事件 + 发送消息/图片）
+requests>=2.25.1            # HTTP 请求（微博 m.weibo.cn API、飞书 OpenAPI）
+Pillow>=8.0.0               # 图片处理（二维码图片）
+selenium>=4.0.0             # 微博二维码登录（Selenium + Chrome，可选；不支持时退化为粘贴 cookie）

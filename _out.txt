@@ -1,0 +1,11 @@
+﻿a: import ok
+b: config ok
+c: load_config ok
+d: build_services ok
+e: repo ok
+f: all_cards ok count= 310
+   WB0000009 | 已激活
+   WB0000010 | 已激活
+   WB0000011 | 已激活
+   WB0000012 | 未激活
+   WB0000013 | 未激活

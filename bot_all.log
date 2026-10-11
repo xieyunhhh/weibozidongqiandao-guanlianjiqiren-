@@ -1,0 +1,118 @@
+[bot_all] 启动三端统一机器人（飞书 + 微信 + QQ）...
+[bot_all] 已启动线程: feishu
+[bot_all] 已启动线程: qq
+[qq] 启动 QQ 机器人（appid=1905703919）[bot] 飞书机器人已启动，开始监听消息…（首次收到消息后，其 open_id 会出现在日志）
+
+[qq] 已刷新 access_token（2625s）
+[Lark] [2026-10-03 16:38:37,068] [INFO] connected to wss://msg-frontier.feishu.cn/ws/v2?fpid=493&aid=552564&device_id=7692358203295665411&access_key=cad28b4fe58012c3dacc610649c311a2&service_id=33554678&ticket=90e1b11e-6d22-499c-b921-80848dfd605a [conn_id=7692358203295665411]
+[qq] 网关地址: wss://api.sgroup.qq.com/websocket
+[qq] 已发送 Identify（订阅单聊+群聊消息）
+[qq] 连接就绪，机器人：超话签到机器人 (bot=True)
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 绑定
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群->32EC3A56BF51A49A226738031116A38B] 图片发送ok
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 取消
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 设置签到时间 06:00~08:00
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq] 连接关闭
+[qq] 网关地址: wss://api.sgroup.qq.com/websocket
+[qq] 已发送 Identify（订阅单聊+群聊消息）
+[qq] 连接就绪，机器人：超话签到机器人 (bot=True)
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 状态
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 超话
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 微信
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] 飞书
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/FD5135565CC5A423E5C9E90269CA2FDB] QQ
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[Lark] [2026-10-03 16:52:13,711] [ERROR] handle message failed, message_type: event, message_id: 036f4865-80ca-4c26-8af0-adba2e921a67, trace_id: 76f694e982213e321b6a788d088d8a2b, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:14,332] [ERROR] handle message failed, message_type: event, message_id: 5a02a0e9-a08c-478e-af44-55849c63e524, trace_id: fe9dd2c10633f3d9127be3022c9db34c, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=@_user_1
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=使用说明
+[Lark] [2026-10-03 16:52:29,578] [ERROR] handle message failed, message_type: event, message_id: a588edd6-2099-48bc-bf29-c267f0f6969f, trace_id: 76f694e982213e321b6a788d088d8a2b, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:29,706] [ERROR] handle message failed, message_type: event, message_id: a98611d5-0879-4b3c-95f5-69ee851c6dd8, trace_id: 91281fea54a2b9c1549437725604a434, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:30,415] [ERROR] handle message failed, message_type: event, message_id: 2fcbc7b1-77db-4077-935d-7cee068c9b09, trace_id: fe9dd2c10633f3d9127be3022c9db34c, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:34,084] [ERROR] handle message failed, message_type: event, message_id: 39957c4a-533d-4f1c-b264-5718329e3000, trace_id: 51ef226a48ab94b89cccef6ac55a231e, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:45,112] [ERROR] handle message failed, message_type: event, message_id: 2b345101-48c1-4380-81dd-71fd4695430c, trace_id: 91281fea54a2b9c1549437725604a434, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=微信
+[Lark] [2026-10-03 16:52:50,587] [ERROR] handle message failed, message_type: event, message_id: d22eaa89-2a3c-4507-b405-0c16bf2fd9bf, trace_id: 51ef226a48ab94b89cccef6ac55a231e, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=QQ
+[Lark] [2026-10-03 16:52:53,791] [ERROR] handle message failed, message_type: event, message_id: 91dfe374-cbcd-4cdd-b191-84a7289e961f, trace_id: 6f3c6258102002d2fbc7436d7b2cce01, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:52:55,802] [ERROR] handle message failed, message_type: event, message_id: 67f30672-2009-4cf4-a89d-91f37092ae3d, trace_id: 04924c5b8b8cdc8d0a21da3288f78f41, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=QQ 状态
+[Lark] [2026-10-03 16:53:08,631] [ERROR] handle message failed, message_type: event, message_id: 5c993ab7-2df7-4803-be0f-e71ae2b8820a, trace_id: 6f3c6258102002d2fbc7436d7b2cce01, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:53:10,828] [ERROR] handle message failed, message_type: event, message_id: fb244f73-e92d-49b1-9b81-388125340833, trace_id: 04924c5b8b8cdc8d0a21da3288f78f41, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 收到消息 open_id=ou_e87b3e3970970cd38596dc3e65001e81 chat=p2p text=QQ 消息
+[qq-admin] 执行 status -> 0b6f0cca85ed
+[qq-admin] 执行 messages -> b95abe012a72
+[Lark] [2026-10-03 16:53:17,697] [ERROR] handle message failed, message_type: event, message_id: c7b2223d-6728-4acd-b225-da045bd32749, trace_id: c1e9ab1a3e8b6840a6c8ca96f985b708, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:53:19,818] [ERROR] handle message failed, message_type: event, message_id: 6b348cba-4a3a-48fe-89ba-d65fcfa89174, trace_id: 07fe7ba590e3e4194eb91ca315b993ef, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:53:33,643] [ERROR] handle message failed, message_type: event, message_id: 12474f0f-d28d-489c-9418-8411d8bc9161, trace_id: c1e9ab1a3e8b6840a6c8ca96f985b708, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:53:35,520] [ERROR] handle message failed, message_type: event, message_id: cdacda72-8767-4867-8729-4f59857b1b0f, trace_id: 07fe7ba590e3e4194eb91ca315b993ef, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:57:30,635] [ERROR] handle message failed, message_type: event, message_id: ef7ef01b-336e-4e1c-9a20-6346fc130838, trace_id: 76f694e982213e321b6a788d088d8a2b, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:57:30,929] [ERROR] handle message failed, message_type: event, message_id: 21144ed0-030d-4a3c-9b85-1a146392f8ed, trace_id: fe9dd2c10633f3d9127be3022c9db34c, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:57:45,823] [ERROR] handle message failed, message_type: event, message_id: 2149f11b-6d7f-46d7-9c84-289121bc8133, trace_id: 91281fea54a2b9c1549437725604a434, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:57:51,522] [ERROR] handle message failed, message_type: event, message_id: 279285f2-bfe2-4046-b783-81d8a7039fdd, trace_id: 51ef226a48ab94b89cccef6ac55a231e, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:58:08,697] [ERROR] handle message failed, message_type: event, message_id: 0e46ef5c-612e-4292-aca2-8f9533548f80, trace_id: 6f3c6258102002d2fbc7436d7b2cce01, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:58:10,841] [ERROR] handle message failed, message_type: event, message_id: f211fa5e-8531-4986-8711-1eed1ac6a414, trace_id: 04924c5b8b8cdc8d0a21da3288f78f41, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:58:33,640] [ERROR] handle message failed, message_type: event, message_id: 9b3de07e-1b65-47db-bed5-df0a682c941c, trace_id: c1e9ab1a3e8b6840a6c8ca96f985b708, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 16:58:35,837] [ERROR] handle message failed, message_type: event, message_id: a6d50aca-59a1-4801-b0ff-0b4ff73524e3, trace_id: 07fe7ba590e3e4194eb91ca315b993ef, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 定时签到失败 ou_ee8c10a9a5a281b5cdc826f47ef9080e: HTTPSConnectionPool(host='open.feishu.cn', port=443): Read timed out. (read timeout=15)
+[qq recv FD5135565CC5A423E5C9E90269CA2FDB] QQ
+[qq] 已刷新 access_token（7090s）
+[qq->FD5135565CC5A423E5C9E90269CA2FDB] 发送ok
+[qq recv FD5135565CC5A423E5C9E90269CA2FDB] 飞书
+[qq->FD5135565CC5A423E5C9E90269CA2FDB] 发送ok
+[qq recv FD5135565CC5A423E5C9E90269CA2FDB] 使用说明
+[qq->FD5135565CC5A423E5C9E90269CA2FDB] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 绑定
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群->32EC3A56BF51A49A226738031116A38B] 图片发送ok
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送失败 400: {"message":"回复消息失败，被动回复时间或者次数超过限制","code":40034128,"err_code":40034128,"trace_id":"b1ec156fd48e8639d7ecca3e6d614bae"}
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq] 连接关闭
+[qq] 网关地址: wss://api.sgroup.qq.com/websocket
+[qq] 已发送 Identify（订阅单聊+群聊消息）
+[qq] 连接就绪，机器人：超话签到机器人 (bot=True)
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 签到
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 购买
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群->32EC3A56BF51A49A226738031116A38B] 图片发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 付款完成
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[Lark] [2026-10-03 17:26:37,337] [ERROR] handle message failed, message_type: event, message_id: 12a27652-f3e1-49e1-bc20-3b44e4faa7a9, trace_id: 8296ef0e9de5e4750029a534bb1fd721, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:26:38,568] [ERROR] handle message failed, message_type: event, message_id: 3544f770-768b-4451-b20b-a6aab6574bef, trace_id: 04c817ec808c61d1243cbe118c06dec3, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:26:41,777] [ERROR] handle message failed, message_type: event, message_id: 94025245-ad99-476c-b1c9-c32c929b48b7, trace_id: 3c507b9db408852349d1eaa439c59bf7, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:26:52,803] [ERROR] handle message failed, message_type: event, message_id: 6364127a-a699-4196-9add-c8cde403cb56, trace_id: 8296ef0e9de5e4750029a534bb1fd721, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:26:54,483] [ERROR] handle message failed, message_type: event, message_id: 3c00dd80-6ce3-4fb0-8127-9a03d99fa046, trace_id: 04c817ec808c61d1243cbe118c06dec3, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:28:02,843] [ERROR] handle message failed, message_type: event, message_id: 681e9dd5-89fd-4849-8555-1eee2189e2dc, trace_id: bda4c47be9df7587cae0f01723c52112, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:28:17,975] [ERROR] handle message failed, message_type: event, message_id: f64ad1e0-5529-47e6-b5ba-58fd967908f4, trace_id: bda4c47be9df7587cae0f01723c52112, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 我的卡
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 签到
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[qq群 recv 32EC3A56BF51A49A226738031116A38B/39372C960DDFA233F4168D57AB75B5E1] 状态
+[qq群->32EC3A56BF51A49A226738031116A38B] 发送ok
+[Lark] [2026-10-03 17:31:52,832] [ERROR] handle message failed, message_type: event, message_id: 78dc4274-1f5f-457e-8c16-e34d4e8aad3b, trace_id: 8296ef0e9de5e4750029a534bb1fd721, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:31:52,920] [ERROR] handle message failed, message_type: event, message_id: 74fd9cdf-c19f-41ff-acec-46070695adbe, trace_id: 8296ef0e9de5e4750029a534bb1fd721, err: processor not found, type: im.chat.access_event.bot_p2p_chat_entered_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:31:55,764] [ERROR] handle message failed, message_type: event, message_id: 0d6d22e4-ae49-4275-85fe-ef0ed715af13, trace_id: 04c817ec808c61d1243cbe118c06dec3, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:32:50,578] [ERROR] handle message failed, message_type: event, message_id: ed113032-318d-43f7-abd0-b6d26e6e7580, trace_id: 88eac639085d27b2dd8771402c03fda7, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:33:18,697] [ERROR] handle message failed, message_type: event, message_id: 36c44b81-d363-48c4-84b8-8cca239e01ed, trace_id: bda4c47be9df7587cae0f01723c52112, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:58:08,720] [ERROR] handle message failed, message_type: event, message_id: 53988bb9-2dba-4e0d-beaa-2f92e90e685b, trace_id: 6f3c6258102002d2fbc7436d7b2cce01, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 17:58:10,570] [ERROR] handle message failed, message_type: event, message_id: ce638e1e-a2a4-422c-80aa-d3bb9611ddca, trace_id: 04924c5b8b8cdc8d0a21da3288f78f41, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[bot] 定时签到失败 ou_e87b3e3970970cd38596dc3e65001e81: HTTPSConnectionPool(host='open.feishu.cn', port=443): Read timed out. (read timeout=15)
+[qq] 连接关闭
+[qq] 网关地址: wss://api.sgroup.qq.com/websocket
+[qq] 已发送 Identify（订阅单聊+群聊消息）
+[qq] 连接就绪，机器人：超话签到机器人 (bot=True)
+[Lark] [2026-10-03 18:31:56,483] [ERROR] handle message failed, message_type: event, message_id: 9703950a-0d22-4d4b-ab60-e11ee3c3c12a, trace_id: 04c817ec808c61d1243cbe118c06dec3, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 18:31:58,673] [ERROR] handle message failed, message_type: event, message_id: 867a3fbc-3504-4b51-a071-25d3c5d94b41, trace_id: 3c507b9db408852349d1eaa439c59bf7, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 18:32:51,512] [ERROR] handle message failed, message_type: event, message_id: c85ac844-a558-461e-a691-23837a5f4ef8, trace_id: 88eac639085d27b2dd8771402c03fda7, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
+[Lark] [2026-10-03 18:33:18,894] [ERROR] handle message failed, message_type: event, message_id: 1aa18370-8131-4818-91df-2a178c292e18, trace_id: bda4c47be9df7587cae0f01723c52112, err: processor not found, type: im.message.message_read_v1 [conn_id=7692358203295665411]
